@@ -1,0 +1,32 @@
+{
+  "name": "tendies",
+  "version": "1.0.0",
+  "description": "quite a silly paper trading bot",
+  "main": "src/app.ts",
+  "scripts": {
+    "start": "ts-node src/app.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ilefa/tendies.git"
+  },
+  "author": "Mike M",
+  "license": "GPL-3.0",
+  "bugs": {
+    "url": "https://github.com/ilefa/tendies/issues"
+  },
+  "homepage": "https://github.com/ilefa/tendies#readme",
+  "dependencies": {
+    "@ilefa/ivy": "^1.0.6",
+    "@typegoose/typegoose": "^7.6.1",
+    "axios": "^0.21.1",
+    "discord.js": "^12.5.3",
+    "dotenv": "^8.2.0",
+    "moment": "^2.29.1",
+    "mongoose": "^5.10.18",
+    "node-schedule": "^2.0.0"
+  },
+  "devDependencies": {
+    "@types/mongoose": "^5.10.2"
+  }
+}
