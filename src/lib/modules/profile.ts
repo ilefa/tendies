@@ -105,11 +105,19 @@ export class ProfileManager extends Module {
         let combinable = this.combinePositions(profile, position);
         let transaction = this.createTransaction(position, position.creationPrice, TransactionType.BUY, amount);
 
+        console.log('position', position);
+        console.log('combinable', combinable);
+        console.log('transaction', transaction);
+
         profile.updateOne({
             transactions: [...profile.transactions, transaction],
             positions: this.updateCombinedPosition(profile, combinable || position),
             costBasis: profile.costBasis + transaction.notional
+        }, (err, raw) => {
+            console.log(err, raw);
         });
+
+        await profile.save();
 
         return {
             success: true,
@@ -164,6 +172,8 @@ export class ProfileManager extends Module {
             globalPL: profile.globalPL + totalPL,
             costBasis: Math.min(0, profile.costBasis - basisChange)
         });
+
+        await profile.save();
 
         return {
             success: true,

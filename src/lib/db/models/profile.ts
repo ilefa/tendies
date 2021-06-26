@@ -21,10 +21,10 @@ export class Profile {
     @prop({ required: true, unique: true })
     public userId: string;
 
-    @prop({ required: true, default: [], ref: () => Transaction })
+    @prop({ required: true, default: [], type: () => Transaction })
     public transactions: Transaction[];
 
-    @prop({ required: true, default: [], ref: () => Position })
+    @prop({ required: true, default: [], type: () => Position })
     public positions: Position[];
 
     @prop({ required: true, default: 0 })

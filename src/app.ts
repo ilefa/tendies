@@ -21,6 +21,7 @@ import { Client } from 'discord.js';
 import { Watermark } from './lib/startup';
 import { DatabaseManager } from './lib/db';
 import { IvyEngine, Logger } from '@ilefa/ivy';
+import { BuyCommand, MeCommand } from './lib/modules/commands';
 import { CustomEventManager, ProfileManager } from './lib/modules';
 
 dotenv.config();
@@ -37,6 +38,7 @@ dotenv.config();
  *   - Before exercising is even considered, I need to figure out exactly how it works so its implemented correctly
  * - Implement account balance tracking per-day so we can have some fancy graphs down the line
  * - Get all days market is closed and prevent people from trading then (or grab market status from some API)
+ * - Divident reinvestment / dividend tracking / dividend calculation
  */
 export default class Tendies extends IvyEngine {
     
@@ -69,11 +71,14 @@ export default class Tendies extends IvyEngine {
         });
     }
 
-    onReady(client: Client) {
+    onReady(_client: Client) {
         this.registerEventHandler(new CustomEventManager(this, this.commandManager))
     }
 
-    registerCommands(): void {}
+    registerCommands(): void {
+        this.registerCommand(new BuyCommand());
+        this.registerCommand(new MeCommand());
+    }
 
     registerModules() {
         this.registerModule(new DatabaseManager());
