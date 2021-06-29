@@ -20,17 +20,23 @@ import dotenv from 'dotenv';
 import { Client } from 'discord.js';
 import { Watermark } from './lib/startup';
 import { DatabaseManager } from './lib/db';
+import { TaskScheduler } from './lib/tasks';
 import { IvyEngine, Logger } from '@ilefa/ivy';
-import { BuyCommand, MeCommand } from './lib/modules/commands';
 import { CustomEventManager, ProfileManager } from './lib/modules';
+
+import {
+    ClearProfileFlow,
+    BuyCommand,
+    FlowCommand,
+    MeCommand,
+    ProfileFlow,
+    SellCommand
+} from './lib/modules/commands';
 
 dotenv.config();
 
 /**
  * Todo Items:
- * - Test buying/selling
- * - Test profile loading/creation
- * - Make commands for buying/selling
  * - Utilize Ivy's stash to cache quotes to avoid ratelimiting
  * - Implement all stonks commands from rkt
  * - Implement a leaderboard for highest globalPL
@@ -42,6 +48,9 @@ dotenv.config();
  */
 export default class Tendies extends IvyEngine {
     
+    profileManager: ProfileManager;
+    taskScheduler: TaskScheduler;
+
     constructor() {
         super({
             token: process.env.DISCORD_TOKEN,
@@ -56,7 +65,8 @@ export default class Tendies extends IvyEngine {
             ],
             reportErrors: [
                 '785050947407052821',
-                '814644813257113672'
+                '814644813257113672',
+                '613783446464102612'
             ],
             color: 0x8BC34A,
             prefix: '$',
@@ -75,17 +85,26 @@ export default class Tendies extends IvyEngine {
         this.registerEventHandler(new CustomEventManager(this, this.commandManager))
     }
 
-    registerCommands(): void {
+    registerCommands() {
         this.registerCommand(new BuyCommand());
+        this.registerCommand(new FlowCommand());
         this.registerCommand(new MeCommand());
+        this.registerCommand(new SellCommand());
     }
 
     registerModules() {
+        let scheduler = new TaskScheduler();
+        // scheduler.registerTask();
+
         this.registerModule(new DatabaseManager());
-        this.registerModule(new ProfileManager());
+        this.registerModule(this.profileManager = new ProfileManager());
+        this.registerModule(this.taskScheduler = scheduler);
     }
 
-    registerFlows(): void {}
+    registerFlows() {
+        this.registerFlow(new ClearProfileFlow());
+        this.registerFlow(new ProfileFlow());
+    }
 
 }
 

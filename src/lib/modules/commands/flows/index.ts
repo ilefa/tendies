@@ -15,5 +15,5 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-export * from './flows';
-export * from './types';
+export * from './clearProfile';
+export * from './profile';

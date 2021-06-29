@@ -15,5 +15,23 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-export * from './flows';
-export * from './types';
+import { Message } from 'discord.js';
+import { TestCommand } from '@ilefa/ivy';
+import { ProfileManager } from '../../profile';
+
+export class ProfileFlow extends TestCommand {
+
+    constructor() {
+        super('profile');
+    }
+
+    async run(message?: Message) {
+        let manager = this.engine.moduleManager.require<ProfileManager>('Profile Manager');
+        if (!manager) return new Error('Profile Manager is not available.');
+
+        let prof = await manager.getProfile(message.author);
+        if (!prof) return new Error(`User ${message.author.id} does not have a profile.`);
+        return prof;
+    }
+
+}

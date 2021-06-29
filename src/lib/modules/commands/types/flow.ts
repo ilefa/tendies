@@ -15,28 +15,33 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import { ProfileManager } from '../profile';
-import { Message, Permissions, User } from 'discord.js';
-import { codeBlock, Command, CommandReturn, emboss } from '@ilefa/ivy';
+import { User, Message } from 'discord.js';
+import {
+    Command,
+    CommandReturn,
+    CustomPermissions,
+    emboss,
+    IvyEmbedIcons
+} from '@ilefa/ivy';
 
-export class MeCommand extends Command {
+export class FlowCommand extends Command {
 
     constructor() {
-        super('me', `Invalid usage: ${emboss('$me')}`, null, [], Permissions.FLAGS.SEND_MESSAGES, false);
+        super('flow', `Invalid usage: ${emboss('$flow <name>')}`, null, [], CustomPermissions.SUPER_PERMS, false, false, [], [], true);
     }
 
     async execute(user: User, message: Message, args: string[]): Promise<CommandReturn> {
-        if (args.length !== 0)
+        if (args.length !== 1) {
             return CommandReturn.HELP_MENU;
+        }
 
-        let manager = this.engine.moduleManager.require<ProfileManager>('Profile Manager');
-        let prof = await manager.getProfile(user);
-        if (!prof) {
-            message.reply('profile null')
+        let flow = this.manager.findFlow(args[0]);
+        if (!flow) {
+            message.reply(this.embeds.build('Test Flow Manager', IvyEmbedIcons.TEST, `Invalid flow: ${emboss(args[0])}.`, null, message));
             return CommandReturn.EXIT;
         }
 
-        message.reply(this.embeds.build(user.username + '#' + user.discriminator + '\'s Profile', user.avatarURL(), codeBlock('json', JSON.stringify(prof, null, 3))))
+        flow.command.execute(user, message, args);
         return CommandReturn.EXIT;
     }
 

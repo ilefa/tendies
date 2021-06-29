@@ -15,5 +15,23 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-export * from './flows';
-export * from './types';
+import { prop } from '@typegoose/typegoose';
+
+export class Snapshot {
+    @prop({ required: true })
+    public date!: Date;
+
+    @prop({ required: true })
+    public balance!: number;
+
+    @prop({ required: true })
+    public change!: number;
+}
+
+export class ProfileSnapshot {
+    @prop({ required: true, unique: true })
+    public userId: string;
+
+    @prop({ required: true, type: Snapshot })
+    public snapshots!: Snapshot[];
+}

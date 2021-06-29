@@ -15,8 +15,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import { quote } from '../../repo';
-import { ProfileManager } from '../profile';
+import { quote } from '../../../repo';
+import { ProfileManager } from '../../profile';
 import { Message, Permissions, User } from 'discord.js';
 import { bold, Command, CommandReturn, emboss, IvyEmbedIcons } from '@ilefa/ivy';
 

@@ -15,5 +15,5 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-export * from './flows';
-export * from './types';
+export const TRIANGLE_GREEN_UP = '<:triangle_up:859218865023877162>';
+export const TRIANGLE_RED_DOWN = ':small_red_triangle_down:';

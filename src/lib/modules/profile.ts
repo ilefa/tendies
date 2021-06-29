@@ -15,10 +15,10 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import { getOptions } from '../repo';
+import { getOptions, quote } from '../repo';
 import { User, UserResolvable } from 'discord.js';
-import { Module, resolvableToId, sum } from '@ilefa/ivy';
 import { OptionsContract, StonkQuote } from '../stonk';
+import { Module, resolvableToId, sum } from '@ilefa/ivy';
 import { BeAnObject, DocumentType } from '@typegoose/typegoose/lib/types';
 import { getModelForClass, ReturnModelType as Model } from '@typegoose/typegoose';
 import { Position, Profile, SecurityType, Transaction, TransactionType } from '../db/models/profile';
@@ -30,6 +30,7 @@ export type TransactionResponse = {
         lastPrice: number;
         amount: number;
         notional: number;
+        security: StonkQuote | OptionsContract;
     }
 }
 
@@ -38,11 +39,44 @@ export type CombinedPosition = {
     combined: Position;
 }
 
+export type ManagedPosition = Position & {
+    index: number;
+}
+
 export type PartialPosition = {
     position: Position;
+    index: number;
     oldAmount: number;
     newAmount: number;
     delta: number;
+}
+
+export type PositionChanges = {
+    full: ManagedPosition[];
+    partial: PartialPosition[];
+}
+
+export type ClosedPositions = {
+    full: ManagedPosition[];
+    partial: PartialPosition[];
+}
+
+export type ProfileOverview = {
+    balance: number;
+    dayChange: number;
+    dayPL: number;
+    profitLoss: number;
+    costBasis: number;
+    performance: SecurityPerformance[];
+}
+
+export type SecurityPerformance = {
+    security: {
+        meta: Position;
+        resolved: StonkQuote | OptionsContract;
+    };
+    dayChange: number;
+    dayPL: number;
 }
 
 export class ProfileManager extends Module {
@@ -66,11 +100,11 @@ export class ProfileManager extends Module {
      * 
      * @param resolvable any type that can resolve to a user
      */
-    getProfile = async (resolvable: UserResolvable): Promise<DocumentType<Profile>> => {
+    getProfile = async (resolvable: UserResolvable, lean?: boolean): Promise<DocumentType<Profile>> => {
         let id = resolvableToId(resolvable);
         if (!id) return null;
 
-        let exists = await this.model.exists({ userId: id })
+        let exists = await this.model.exists({ userId: id });
         if (!exists) return await this.model.create({
             userId: id,
             transactions: [],
@@ -79,7 +113,54 @@ export class ProfileManager extends Module {
             costBasis: 0,
         });
 
-        return await this.model.findOne({ userId: id });
+        return await this
+            .model
+            .findOne({ userId: id })
+            .lean(lean);
+    }
+
+    /**
+     * Attempts to create an overview for the provided
+     * profile.
+     * 
+     * @param profile the profile to create an overview for
+     */
+    getOverview = async (profile: Profile): Promise<ProfileOverview> => {
+        let resolvedPositions = await Promise.all(profile
+            .positions
+            .map(async pos => ({
+                ...pos,
+                resolved: await quote(pos.ticker, '1d', '30m')
+            })));
+
+        let balance = sum(resolvedPositions, pos => pos.resolved.meta.regularMarketPrice * pos.amount);
+        let dayChange = sum(resolvedPositions, pos => pos.resolved.meta.regularMarketPrice - pos.resolved.meta.previousClose);
+        let performance: SecurityPerformance[] = resolvedPositions
+            .sort((a, b) => {
+                let dB = b.resolved.meta.regularMarketPrice - b.resolved.meta.previousClose;
+                let dA = a.resolved.meta.regularMarketPrice - a.resolved.meta.previousClose;
+                return dB - dA;
+            })
+            .map(pos => ({
+                security: {
+                    meta: pos as Position,
+                    resolved: pos.resolved,
+                },
+                dayChange: pos.resolved.meta.regularMarketPrice - pos.resolved.meta.previousClose,
+                dayPL: pos.creationPrice - pos.resolved.meta.regularMarketPrice,
+            }));
+
+        let unrealizedPL = sum(resolvedPositions, pos => (pos.resolved.meta.regularMarketPrice - pos.creationPrice) * pos.amount);
+        let unrealizedDayPL = sum(performance, pos => pos.dayPL * pos.security.meta.amount);
+
+        return {
+            balance,
+            dayChange,
+            dayPL: unrealizedDayPL,
+            profitLoss: profile.globalPL + unrealizedPL,
+            costBasis: profile.costBasis,
+            performance
+        };
     }
     
     /**
@@ -105,26 +186,18 @@ export class ProfileManager extends Module {
         let combinable = this.combinePositions(profile, position);
         let transaction = this.createTransaction(position, position.creationPrice, TransactionType.BUY, amount);
 
-        console.log('position', position);
-        console.log('combinable', combinable);
-        console.log('transaction', transaction);
-
-        profile.updateOne({
-            transactions: [...profile.transactions, transaction],
-            positions: this.updateCombinedPosition(profile, combinable || position),
-            costBasis: profile.costBasis + transaction.notional
-        }, (err, raw) => {
-            console.log(err, raw);
-        });
-
-        await profile.save();
+        profile.transactions = [...profile.transactions, transaction];
+        profile.positions = this.updateCombinedPosition(profile, combinable || position);
+        profile.costBasis = profile.costBasis + transaction.notional;
+        profile.save();
 
         return {
             success: true,
             details: {
                 amount,
                 lastPrice: position.creationPrice,
-                notional: position.creationPrice * amount
+                notional: position.creationPrice * amount,
+                security,
             }
         }
     }
@@ -151,38 +224,61 @@ export class ProfileManager extends Module {
             ? (security as StonkQuote).meta.symbol
             : (security as OptionsContract).contractSymbol;
 
-        let positions = profile.positions.filter(position => position.ticker === ticker);
-        let totalHeld = sum(positions, ent => ent.amount);
+        let positions: ManagedPosition[] = profile
+            .positions
+            .map((position, i) => ({
+                name: position.name,
+                ticker: position.ticker,
+                type: position.type,
+                createdAt: position.createdAt,
+                creationPrice: position.creationPrice,
+                amount: position.amount,
+                index: i
+            }));
+
+        let managed: ManagedPosition[] = positions.filter(position => position.ticker === ticker);
+        let totalHeld = sum(managed, ent => ent.amount);
+
         if (amount > totalHeld) return {
             success: false,
             error: `Insufficient ${securityType === SecurityType.STOCK ? 'shares' : 'contracts'} for this transaction`,
         }
 
-        let notional = sum(positions, ent => ent.amount * lastPrice) * (securityType === SecurityType.STOCK ? 1 : 100);
-        let basisChange = sum(positions, ent => ent.creationPrice * ent.amount);
-        let totalPL = notional - basisChange;
+        let positionChanges = this.positionsToClose(managed, amount);
+        let modifiedPositions = this.updateModifiedPositions(positions, positionChanges);
+        let transaction = this.createTransaction(managed[0], lastPrice, TransactionType.SELL, amount);
         
-        let positionChanges = this.positionsToClose(positions, amount);
-        let transaction = this.createTransaction(positions[0], lastPrice, TransactionType.SELL, amount);
-        let positionFilter = (position: Position) => positionChanges.fullClose.includes(position);
+        let notional = (amount * lastPrice) * (securityType === SecurityType.STOCK ? 1 : 100);
+        let basis = this.computeTransactionBasisDelta(positionChanges);
+        let totalPL = notional - basis;
 
-        profile.updateOne({
-            positions: profile.positions.filter(positionFilter),
-            transactions: [...profile.transactions, transaction],
-            globalPL: profile.globalPL + totalPL,
-            costBasis: Math.min(0, profile.costBasis - basisChange)
-        });
-
-        await profile.save();
+        profile.transactions = [...profile.transactions, transaction];
+        profile.positions = modifiedPositions;
+        profile.globalPL = this.setPrecision(profile.globalPL + totalPL);
+        profile.costBasis = Math.max(0, this.setPrecision(profile.costBasis - basis));
+        profile.save();
 
         return {
             success: true,
             details: {
                 lastPrice,
                 amount,
-                notional
+                notional,
+                security
             }
         }
+    }
+
+    private computeTransactionBasisDelta = (changes: PositionChanges) => {
+        let fullBasis = sum(changes.full, pos => pos.creationPrice);
+        let partialBasis = 0;
+        for (let partial of changes.partial) {
+            for (let i = 0; i < partial.delta; i++) {
+                partialBasis += partial.position.creationPrice;
+            }
+        }
+
+        return fullBasis + partialBasis;
     }
 
     private combinePositions = (profile: Profile, position: Position): CombinedPosition => {
@@ -193,8 +289,8 @@ export class ProfileManager extends Module {
                 && existing.creationPrice === position.creationPrice)[0];
 
         if (!match) return null;
-
         match.amount += position.amount;
+
         return {
             original: position,
             combined: match
@@ -209,46 +305,61 @@ export class ProfileManager extends Module {
             .positions
             .findIndex(existing => existing.ticker === position.combined.ticker
                 && existing.creationPrice === position.combined.creationPrice);
-
-        if (~index) return [...profile.positions, position];
+        
+        if (index === -1) return [...profile.positions, position.combined];
         profile.positions[index] = position.combined;
         return profile.positions;
     }
 
-    private positionsToClose = (positions: Position[], amount: number) => {
-        let fullClose: Position[] = [];
-        let partialClose: PartialPosition[] = [];
+    private positionsToClose = (positions: ManagedPosition[], amount: number): PositionChanges => {
+        let full: ManagedPosition[] = [];
+        let partial: PartialPosition[] = [];
+        let sorted = positions.sort((a, b) => a.amount - b.amount);
         let closed = 0;
-        for (let position of positions) {
-            if (closed > amount)
+
+        for (let position of sorted) {
+            if (closed >= amount)
                 break;
 
-            let pre = position.amount;
-            let overfill = false;
-            for (let i = 0; i < position.amount; i++) {
-                if (closed > amount) {
-                    overfill = true;
-                    partialClose.push({
+            let count = position.amount;
+            let originalAmount = position.amount;
+            let overfilled = false;
+            for (let i = 0; i < originalAmount; i++) {
+                if (closed >= amount) {
+                    overfilled = true;
+                    partial.push({
                         position,
-                        newAmount: position.amount,
-                        oldAmount: pre,
-                        delta: pre - position.amount
+                        index: position.index,
+                        newAmount: count,
+                        oldAmount: originalAmount,
+                        delta: originalAmount - count
                     });
+
                     break;
                 }
 
                 closed++;
-                position.amount--;
+                count--;
             }
 
-            if (!overfill) fullClose.push(position);
+            if (!overfilled) full.push(position);
         }
 
-        return {
-            fullClose,
-            partialClose,
-            closed
+        return { full, partial }
+    }
+
+    private updateModifiedPositions = (all: ManagedPosition[], modified: ClosedPositions) => {
+        let positions = [...all];
+        for (let full of modified.full)
+            positions = positions.filter(pos => pos.index !== full.index);
+
+        for (let partial of modified.partial) {
+            let match = positions.find(pos => pos.index === partial.index);
+            if (!match) continue;
+            match.amount = partial.newAmount;
         }
+
+        return positions as Position[];
     }
 
     private createPosition = async (security: StonkQuote | OptionsContract, type: SecurityType, amount: number) => {
@@ -286,9 +397,11 @@ export class ProfileManager extends Module {
         transaction.createdAt = new Date();
         transaction.amount = amount;
         transaction.creationPrice = lastPrice;
-        transaction.notional = (lastPrice * multiplier) * amount;
+        transaction.notional = this.setPrecision((lastPrice * multiplier) * amount);
 
         return transaction;
     }
+
+    private setPrecision = (int: number, digits = 2) => parseFloat(int.toFixed(digits));
 
 }

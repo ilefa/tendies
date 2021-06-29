@@ -15,5 +15,28 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-export * from './flows';
-export * from './types';
+import { v4 as uuid } from 'uuid';
+import { IvyEngine } from '@ilefa/ivy';
+
+export abstract class Task {
+
+    id: string;
+    engine: IvyEngine;
+
+    constructor(public interval: string, id?: string) {
+        this.id = id || uuid();
+    }
+
+    /**
+     * Called when the task scheduler executes
+     * this task upon the given interval.
+     */
+    abstract run(): void;
+
+    /**
+     * Called when the task scheduler is shutting down
+     * all tasks, can be used for saving user data or whatnot.
+     */
+    abstract exit(): void;
+
+}

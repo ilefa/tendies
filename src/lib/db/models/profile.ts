@@ -17,45 +17,28 @@
 
 import { prop } from '@typegoose/typegoose';
 
-export class Profile {
-    @prop({ required: true, unique: true })
-    public userId: string;
-
-    @prop({ required: true, default: [], type: () => Transaction })
-    public transactions: Transaction[];
-
-    @prop({ required: true, default: [], type: () => Position })
-    public positions: Position[];
-
-    @prop({ required: true, default: 0 })
-    public globalPL: number;
-
-    @prop({ required: true, default: 0 })
-    public costBasis: number;
-}
-
 export enum SecurityType {
     STOCK, OPTION
 }
 
 export class Position {
     @prop({ required: true })
-    public name: string;
+    public name!: string;
 
     @prop({ required: true })
-    public ticker: string;
+    public ticker!: string;
 
     @prop({ required: true, enum: SecurityType })
-    public type: SecurityType;
+    public type!: SecurityType;
 
     @prop({ required: true })
-    public createdAt: Date;
+    public createdAt!: Date;
 
     @prop({ required: true })
-    public creationPrice: number;
+    public creationPrice!: number;
 
     @prop({ required: true })
-    public amount: number;
+    public amount!: number;
 }
 
 export enum TransactionType {
@@ -65,23 +48,40 @@ export enum TransactionType {
 
 export class Transaction {
     @prop({ required: true })
-    public ticker: string;
+    public ticker!: string;
 
     @prop({ required: true, enum: SecurityType })
-    public securityType: SecurityType;
+    public securityType!: SecurityType;
 
     @prop({ required: true, enum: TransactionType })
-    public type: TransactionType;
+    public type!: TransactionType;
     
     @prop({ required: true })
-    public createdAt: Date;
+    public createdAt!: Date;
     
     @prop({ required: true })
-    public creationPrice: number;
+    public creationPrice!: number;
     
     @prop({ required: true })
-    public amount: number;
+    public amount!: number;
 
     @prop({ required: true })
-    public notional: number;
+    public notional!: number;
+}
+
+export class Profile {
+    @prop({ required: true, unique: true })
+    public userId!: string;
+
+    @prop({ required: true, type: Transaction })
+    public transactions!: Transaction[];
+
+    @prop({ required: true, type: Position })
+    public positions!: Position[];
+
+    @prop({ required: true })
+    public globalPL!: number;
+
+    @prop({ required: true })
+    public costBasis!: number;
 }
