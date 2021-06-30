@@ -20,11 +20,14 @@
     "@ilefa/ivy": "^1.0.6",
     "@typegoose/typegoose": "^7.6.1",
     "axios": "^0.21.1",
+    "chartjs-to-image": "^1.0.4",
     "discord.js": "^12.5.3",
     "dotenv": "^8.2.0",
     "moment": "^2.29.1",
     "mongoose": "^5.10.18",
     "node-schedule": "^2.0.0",
+    "short-number": "^1.0.7",
+    "trading-signals": "^1.7.0",
     "uuid": "^8.3.2"
   },
   "devDependencies": {

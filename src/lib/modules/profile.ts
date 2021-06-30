@@ -79,6 +79,27 @@ export type SecurityPerformance = {
     dayPL: number;
 }
 
+export type SecurityOverview = {
+    name: string;
+    ticker: string;
+    marketValue: number;
+    shareMarketValue: number;
+    contractMarketValue: number;
+    averageShareCost: number;
+    averageContractCost: number;
+    assets: Subpositions[];
+}
+
+export type Subpositions = {
+    amount: number;
+    type: SecurityType;
+    gainLoss: number;
+    creationPrice: number;
+    createdAt: Date;
+}
+
+export type SellAmount = number | 'all';
+
 export class ProfileManager extends Module {
 
     private model: Model<typeof Profile, BeAnObject>;
@@ -162,6 +183,51 @@ export class ProfileManager extends Module {
             performance
         };
     }
+
+    /**
+     * Attempts to create an overview for all positions
+     * held by a given profile for a given ticker.
+     * 
+     * This will bundle together all shares/contracts
+     * for a given ticker that are bought at differing
+     * prices, and give a centralized way to compare
+     * gain/loss per subposition.
+     * 
+     * @param profile the profile to create an overview for
+     * @param ticker the ticker to get an overview for
+     */
+    createOverview = async (profile: Profile, ticker: string): Promise<SecurityOverview> => {
+        let positions = await Promise.all(profile
+            .positions
+            .filter(pos => pos.ticker === ticker)
+            .map(async pos => ({
+                ...pos,
+                resolved: await quote(pos.ticker, '1d', '30m')
+            })));
+
+        if (!positions || !positions.length) return null;
+        let shares = positions.filter(pos => pos.type === SecurityType.STOCK);
+        let contracts = positions.filter(pos => pos.type === SecurityType.OPTION);
+        let shareValue = sum(shares, share => share.resolved.meta.regularMarketPrice * share.amount);
+        let contractValue = 0; // for now
+
+        return {
+            ticker,
+            name: positions[0].name,
+            marketValue: shareValue + contractValue,
+            shareMarketValue: shareValue,
+            contractMarketValue: contractValue,
+            averageShareCost: sum(shares, pos => pos.creationPrice) / (shares.length === 0 ? 1 : shares.length),
+            averageContractCost: sum(contracts, pos => pos.creationPrice) / (contracts.length === 0 ? 1 : contracts.length),
+            assets: positions.map(pos => ({
+                amount: pos.amount,
+                type: pos.type,
+                gainLoss: pos.resolved.meta.regularMarketPrice - pos.creationPrice,
+                creationPrice: pos.creationPrice,
+                createdAt: pos.createdAt
+            }))
+        };
+    }
     
     /**
      * Attempts to open some amount of positions of
@@ -210,7 +276,7 @@ export class ProfileManager extends Module {
      * @param security the security to close positions for
      * @param amount the amount of positions to close
      */
-    sell = async (user: User, security: StonkQuote | OptionsContract, amount: number): Promise<TransactionResponse> => {
+    sell = async (user: User, security: StonkQuote | OptionsContract, amount: SellAmount): Promise<TransactionResponse> => {
         let profile = await this.getProfile(user);
         let securityType = 'contractSymbol' in security
             ? SecurityType.OPTION
@@ -243,6 +309,9 @@ export class ProfileManager extends Module {
             success: false,
             error: `Insufficient ${securityType === SecurityType.STOCK ? 'shares' : 'contracts'} for this transaction`,
         }
+
+        if (amount === 'all')
+            amount = totalHeld;
 
         let positionChanges = this.positionsToClose(managed, amount);
         let modifiedPositions = this.updateModifiedPositions(positions, positionChanges);

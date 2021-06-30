@@ -30,7 +30,9 @@ import {
     FlowCommand,
     MeCommand,
     ProfileFlow,
-    SellCommand
+    SellCommand,
+    PositionsCommand,
+    StonkCommand
 } from './lib/modules/commands';
 
 dotenv.config();
@@ -89,7 +91,9 @@ export default class Tendies extends IvyEngine {
         this.registerCommand(new BuyCommand());
         this.registerCommand(new FlowCommand());
         this.registerCommand(new MeCommand());
+        this.registerCommand(new PositionsCommand());
         this.registerCommand(new SellCommand());
+        this.registerCommand(new StonkCommand());
     }
 
     registerModules() {

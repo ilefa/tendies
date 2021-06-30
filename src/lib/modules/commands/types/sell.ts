@@ -16,23 +16,23 @@
  */
 
 import { quote } from '../../../repo';
-import { ProfileManager } from '../../profile';
+import { ProfileManager, SellAmount } from '../../profile';
 import { Message, Permissions, User } from 'discord.js';
 import { bold, Command, CommandReturn, emboss, IvyEmbedIcons } from '@ilefa/ivy';
 
 export class SellCommand extends Command {
 
     constructor() {
-        super('sell', `Invalid usage: ${emboss('$sell <ticker> <amount>')}`, null, [], Permissions.FLAGS.SEND_MESSAGES, false);
+        super('sell', `Invalid usage: ${emboss('$sell <ticker> <amount | all>')}`, null, [], Permissions.FLAGS.SEND_MESSAGES, false);
     }
 
     async execute(user: User, message: Message, args: string[]): Promise<CommandReturn> {
         if (args.length !== 2)
             return CommandReturn.HELP_MENU;
 
-        let amount = parseFloat(args[1]);
-        if (isNaN(amount)) {
-            message.reply(this.embeds.build('Sell Securities', IvyEmbedIcons.STONKS, `Amount must be numeric: ${emboss(amount)}`, [], message));
+        let amount = args[1].toLowerCase();
+        if (!this.isValidAmount(amount)) {
+            message.reply(this.embeds.build('Sell Securities', IvyEmbedIcons.STONKS, `Amount must be numeric or 'all': ${emboss(amount)}`, [], message));
             return CommandReturn.EXIT;
         }
 
@@ -45,14 +45,14 @@ export class SellCommand extends Command {
         }
 
         let manager = this.engine.moduleManager.require<ProfileManager>('Profile Manager');
-        let res = await manager.sell(user, stock, parseInt(args[1]));
+        let res = await manager.sell(user, stock, amount);
         if (res.error) {
             message.reply(this.embeds.build('Sell Securities', IvyEmbedIcons.STONKS, `Something went wrong while processing your request:\n` 
                 + emboss(res.error instanceof Error ? res.error.message : res.error), [], message));
             return CommandReturn.EXIT;
         }
 
-        message.reply(this.embeds.build('Transactions', user.avatarURL(), `Sold ${bold(amount.toLocaleString() + 'x')} shares of ${bold(stock.meta.symbol)}.`, [
+        message.reply(this.embeds.build('Transactions', user.avatarURL(), `Sold ${bold(res.details.amount + 'x')} shares of ${bold(stock.meta.symbol)}.`, [
             {
                 name: 'Share Price',
                 value: '$' + res.details.lastPrice.toLocaleString(),
@@ -66,6 +66,10 @@ export class SellCommand extends Command {
         ], message));
 
         return CommandReturn.EXIT;
+    }
+
+    private isValidAmount = (arg: string | number): arg is SellAmount => {
+        return arg === 'all' || !isNaN(parseInt(arg.toString()));
     }
 
 }

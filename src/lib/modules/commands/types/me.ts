@@ -17,8 +17,8 @@
 
 import { ProfileManager } from '../../profile';
 import { Message, Permissions, User } from 'discord.js';
+import { indicatorArrow, madeLost } from '../../../util';
 import { SecurityType } from '../../../db/models/profile';
-import { TRIANGLE_GREEN_UP, TRIANGLE_RED_DOWN } from '../../../util';
 
 import {
     bold,
@@ -58,27 +58,17 @@ export class MeCommand extends Command {
             + `The current balance of your portfolio is ${bold('$' + overview.balance.toLocaleString())},\n` 
             + `and you currently hold ${bold(shares.toLocaleString() + ` share${numberEnding(shares)}`)} + ${bold(contracts.toLocaleString() + ` contract${numberEnding(contracts)}`)}.\n\n` 
             + bold('The Numbers') + `\n` 
-            + `${this.indicatorArrow(overview.dayPL)} You ${this.madeLost(overview.dayPL)} ${bold('$' + overview.dayPL.toLocaleString())} today.\n` 
-            + `${this.indicatorArrow(overview.profitLoss)} Overall, you've ${this.madeLost(overview.profitLoss)} ${bold('$' + overview.profitLoss.toLocaleString())}.\n` 
+            + `${indicatorArrow(overview.dayPL)} You've ${madeLost(overview.dayPL)} ${bold(getChangeString(overview.dayPL.toLocaleString(), '$', 2, false))} today.\n` 
+            + `${indicatorArrow(overview.profitLoss)} Overall, you've ${madeLost(overview.profitLoss)} ${bold(getChangeString(overview.profitLoss.toLocaleString(), '$', 2, false))}.\n` 
             + `:dollar: You've put ${bold('$' + overview.costBasis.toLocaleString())} into the market.\n\n`
-            + bold(`Top${topN === 1 ? '' : ' ' + capitalizeFirst(toWords(topN))} Securit${topN === 1 ? 'y' : 'ies'}`) + `\n` 
-            + overview
+            + bold(`Top${topN <= 1 ? '' : ' ' + capitalizeFirst(toWords(topN))} Securit${topN === 1 ? 'y' : 'ies'}`) + `\n` 
+            + (overview.performance.length ? overview
                 .performance
                 .slice(0, topN)
-                .map((ent, i) => `:${toWords(i + 1)}: ${bold(ent.security.meta.name + ` (${ent.security.meta.ticker})`)} ${this.madeLost(ent.dayChange, 'gained')} ${bold(getChangeString(ent.dayChange.toLocaleString(), '$', 2, false))}.`)
-                .join('\n')));
+                .map((ent, i) => `:${toWords(i + 1)}: ${bold(ent.security.meta.name + ` (${ent.security.meta.ticker})`)} ${madeLost(ent.dayChange, 'gained')} ${bold(getChangeString(ent.dayChange.toLocaleString(), '$', 2, false))}.`)
+                .join('\n') : `You don't have any securities.`)));
 
         return CommandReturn.EXIT;
-    }
-
-    private indicatorArrow = (value: number) => {
-        if (value >= 0) return TRIANGLE_GREEN_UP;
-        if (value < 0) return TRIANGLE_RED_DOWN;
-    }
-
-    private madeLost = (value: number, made?: string, lost?: string) => {
-        if (value >= 0) return made || 'made';
-        if (value < 0) return lost || 'lost';
     }
 
 }
